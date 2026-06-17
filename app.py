@@ -80,7 +80,7 @@ with col2:
         })
         st.success(f"Aggiunto: {piatto_scelto}!")
 
----
+
 # --- TOTALE DELLA GIORNATA ---
 st.header("📊 Riassunto Oggi")
 
