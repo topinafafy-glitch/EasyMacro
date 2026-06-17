@@ -6,6 +6,12 @@ from supabase import create_client, Client
 SUPABASE_URL = "https://jblladmggeuokluiopou.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpibGxhZG1nZ2V1b2tsdWlvcG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2OTI2OTIsImV4cCI6MjA5NzI2ODY5Mn0.GvrR_Lnl7QeDGN5Q-xkV2ez4t3xOrXNw9A4mgv3B28Y"
 
+# --- 🎯 IMPOSTA I TUOI OBIETTIVI GIORNALIERI QUI ---
+TARGET_KCAL = 1500
+TARGET_CARBI = 160
+TARGET_PRO = 90
+TARGET_GRASSI = 40
+
 @st.cache_resource
 def init_connection():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -28,6 +34,37 @@ def ottieni_piatti():
 def ottieni_componenti_piatto(id_piatto):
     res = supabase.table("composizione_piatti").select("grammi, ingredienti(carboidrati_100g, proteine_100g, grassi_100g, nome)").eq("id_piatto", id_piatto).execute()
     return res.data
+
+# --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI ---
+def genera_card_macro(titolo, attuale, target, unita="g"):
+    percentuale = (attuale / target) * 100 if target > 0 else 0
+    
+    # Determina il colore in base alle tue regole
+    if percentuale > 100:
+        colore = "#FF4B4B"  # Rosso Streamlit
+    elif percentuale > 80:
+        colore = "#FFA500"  # Arancione
+    else:
+        colore = "#2EB67D"  # Verde sano
+        
+    # Codice HTML per disegnare la "scatolina" del macro
+    html_code = f"""
+    <div style="
+        background-color: #f0f2f6; 
+        padding: 15px; 
+        border-radius: 10px; 
+        border-left: 5px solid {colore};
+        margin-bottom: 10px;
+        text-align: center;
+    ">
+        <p style="margin: 0; font-size: 14px; color: #555; font-weight: bold;">{titolo}</p>
+        <p style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">
+            <span style="color: {colore};">{attuale:.1f}</span> / {target}{unita}
+        </p>
+        <p style="margin: 0; font-size: 11px; color: #888;">{percentuale:.1f}% del target</p>
+    </div>
+    """
+    return st.markdown(html_code, unsafe_allow_html=True)
 
 # --- INTERFACCIA GRAFICA (DIARIO) ---
 st.title("🥑 Il mio Diario dei Macronutrienti")
@@ -86,18 +123,23 @@ with col2:
 # --- TOTALE DELLA GIORNATA ---
 st.header("📊 Riassunto Oggi")
 
+tot_c = sum(item["carbi"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
+tot_p = sum(item["pro"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
+tot_f = sum(item["fat"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
+tot_kcal = (tot_c * 4) + (tot_p * 4) + (tot_f * 9)
+
+# Mostra SEMPRE i contatori con i target e i colori dinamici
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    genera_card_macro("⚡ Calorie", tot_kcal, TARGET_KCAL, "kcal")
+with c2:
+    genera_card_macro("🍞 Carboidrati", tot_c, TARGET_CARBI)
+with c3:
+    genera_card_macro("🍗 Proteine", tot_p, TARGET_PRO)
+with c4:
+    genera_card_macro("🥑 Grassi", tot_f, TARGET_GRASSI)
+
 if st.session_state.diario_alimentare:
-    tot_c = sum(item["carbi"] for item in st.session_state.diario_alimentare)
-    tot_p = sum(item["pro"] for item in st.session_state.diario_alimentare)
-    tot_f = sum(item["fat"] for item in st.session_state.diario_alimentare)
-    tot_kcal = (tot_c * 4) + (tot_p * 4) + (tot_f * 9)
-    
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("⚡ Calorie", f"{int(tot_kcal)} kcal")
-    c2.metric("🍞 Carbi", f"{tot_c:.1f} g")
-    c3.metric("🍗 Pro", f"{tot_p:.1f} g")
-    c4.metric("🥑 Grassi", f"{tot_f:.1f} g")
-    
     st.write("### Cibi inseriti oggi:")
     for item in st.session_state.diario_alimentare:
         st.text(f"• {item['nome']} ➡️ C: {item['carbi']:.1f}g | P: {item['pro']:.1f}g | G: {item['fat']:.1f}g")
@@ -110,7 +152,7 @@ else:
 
 st.markdown("---")
 
-# --- NUOVA SEZIONE: PANNELLO DI GESTIONE DATABASE ---
+# --- PANNELLO DI GESTIONE DATABASE ---
 st.header("⚙️ Pannello di Controllo (Inserimento cibi)")
 
 expander_ing = st.expander("📝 Crea Nuovo Ingrediente Base")
@@ -122,7 +164,7 @@ with expander_ing:
     
     if st.button("Salva Ingrediente nel Database"):
         if nuovo_nome:
-            data = {"nome": nuovo_nome, "carboidrati_100g": c_100, "proteine_100g": p_100, "grassi_100g": f_100}
+            data = {"nome": nuevo_nome, "carboidrati_100g": c_100, "proteine_100g": p_100, "grassi_100g": f_100}
             supabase.table("ingredienti").insert(data).execute()
             st.success(f"'{nuovo_nome}' salvato con successo! Ricarica la pagina.")
             st.rerun()
@@ -151,19 +193,17 @@ with expander_piatto:
             
         if st.button("SALVA PIATTO DEFINITIVAMENTE"):
             if nome_nuovo_piatto:
-                # 1. Inserisce il piatto nella tabella 'piatti'
                 res_piatto = supabase.table("piatti").insert({"nome_piatto": nome_nuovo_piatto}).execute()
                 id_nuovo_piatto = res_piatto.data[0]["id"]
                 
-                # 2. Inserisce la lista degli ingredienti nella tabella di giunzione
-                for ing in st.session_state.ingredienti_nuovo_piatto:
+                for ing in st.session_state.indigo_nuovo_piatto:
                     supabase.table("composizione_piatti").insert({
                         "id_piatto": id_nuovo_piatto,
                         "id_ingrediente": ing["id"],
                         "grammi": ing["grammi"]
                     }).execute()
                     
-                st.session_state.ingredienti_nuovo_piatto = [] # Svuota la memoria temporanea
+                st.session_state.ingredienti_nuovo_piatto = []
                 st.success(f"Piatto '{nome_nuovo_piatto}' salvato nel database!")
                 st.rerun()
             else:
