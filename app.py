@@ -32,22 +32,20 @@ def ottieni_piatti():
     return res.data
 
 def ottieni_componenti_piatto(id_piatto):
-    res = supabase.table("composizione_piatti").select("grammi, ingredienti(carboidrati_100g, proteine_100g, grassi_100g, nome)").eq("id_piatto", id_piatto).execute()
+    res = supabase.table("composizione_piatti").select("grammi, ingredienti(calorie_100g, carboidrati_100g, proteine_100g, grassi_100g, nome)").eq("id_piatto", id_piatto).execute()
     return res.data
 
 # --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI ---
 def genera_card_macro(titolo, attuale, target, unita="g"):
     percentuale = (attuale / target) * 100 if target > 0 else 0
     
-    # Determina il colore in base alle tue regole
     if percentuale > 100:
-        colore = "#FF4B4B"  # Rosso Streamlit
+        colore = "#FF4B4B"  # Rosso
     elif percentuale > 80:
         colore = "#FFA500"  # Arancione
     else:
-        colore = "#2EB67D"  # Verde sano
+        colore = "#2EB67D"  # Verde
         
-    # Codice HTML per disegnare la "scatolina" del macro
     html_code = f"""
     <div style="
         background-color: #f0f2f6; 
@@ -82,12 +80,14 @@ with col1:
         
         if st.button("Aggiungi Ingrediente"):
             dettagli = next(item for item in lista_ingredienti if item["nome"] == ingr_scelto)
+            # Calcolo basato sui valori reali del database
+            kcal = (dettagli.get("calorie_100g", 0) * grammi) / 100
             carbi = (dettagli["carboidrati_100g"] * grammi) / 100
             pro = (dettagli["proteine_100g"] * grammi) / 100
             fat = (dettagli["grassi_100g"] * grammi) / 100
             
             st.session_state.diario_alimentare.append({
-                "nome": f"{ingr_scelto} ({grammi}g)", "carbi": carbi, "pro": pro, "fat": fat
+                "nome": f"{ingr_scelto} ({grammi}g)", "kcal": kcal, "carbi": carbi, "pro": pro, "fat": fat
             })
             st.success(f"Aggiunto: {ingr_scelto}!")
     else:
@@ -105,16 +105,17 @@ with col2:
             dettagli_piatto = next(item for item in lista_piatti if item["nome_piatto"] == piatto_scelto)
             componenti = ottieni_componenti_piatto(dettagli_piatto["id"])
             
-            tot_carbi, tot_pro, tot_fat = 0, 0, 0
+            tot_kcal, tot_carbi, tot_pro, tot_fat = 0, 0, 0, 0
             for comp in componenti:
                 g = comp["grammi"]
                 ing = comp["ingredienti"]
+                tot_kcal += (ing.get("calorie_100g", 0) * g) / 100
                 tot_carbi += (ing["carboidrati_100g"] * g) / 100
                 tot_pro += (ing["proteine_100g"] * g) / 100
                 tot_fat += (ing["grassi_100g"] * g) / 100
                 
             st.session_state.diario_alimentare.append({
-                "nome": piatto_scelto, "carbi": tot_carbi, "pro": tot_pro, "fat": tot_fat
+                "nome": piatto_scelto, "kcal": tot_kcal, "carbi": tot_carbi, "pro": tot_pro, "fat": tot_fat
             })
             st.success(f"Aggiunto: {piatto_scelto}!")
     else:
@@ -123,12 +124,11 @@ with col2:
 # --- TOTALE DELLA GIORNATA ---
 st.header("📊 Riassunto Oggi")
 
+tot_kcal = sum(item["kcal"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
 tot_c = sum(item["carbi"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
 tot_p = sum(item["pro"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
 tot_f = sum(item["fat"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
-tot_kcal = (tot_c * 4) + (tot_p * 4) + (tot_f * 9)
 
-# Mostra SEMPRE i contatori con i target e i colori dinamici
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     genera_card_macro("⚡ Calorie", tot_kcal, TARGET_KCAL, "kcal")
@@ -142,7 +142,7 @@ with c4:
 if st.session_state.diario_alimentare:
     st.write("### Cibi inseriti oggi:")
     for item in st.session_state.diario_alimentare:
-        st.text(f"• {item['nome']} ➡️ C: {item['carbi']:.1f}g | P: {item['pro']:.1f}g | G: {item['fat']:.1f}g")
+        st.text(f"• {item['nome']} ➡️ {int(item['kcal'])} kcal | C: {item['carbi']:.1f}g | P: {item['pro']:.1f}g | G: {item['fat']:.1f}g")
         
     if st.button("Svuota Giornata"):
         st.session_state.diario_alimentare = []
@@ -158,13 +158,20 @@ st.header("⚙️ Pannello di Controllo (Inserimento cibi)")
 expander_ing = st.expander("📝 Crea Nuovo Ingrediente Base")
 with expander_ing:
     nuovo_nome = st.text_input("Nome Alimento (es. Riso Basmati)")
+    kcal_100 = st.number_input("Calorie (kcal) per 100g", min_value=0, step=1)
     c_100 = st.number_input("Carboidrati per 100g", min_value=0.0, step=0.1)
     p_100 = st.number_input("Proteine per 100g", min_value=0.0, step=0.1)
     f_100 = st.number_input("Grassi per 100g", min_value=0.0, step=0.1)
     
     if st.button("Salva Ingrediente nel Database"):
         if nuovo_nome:
-            data = {"nome": nuevo_nome, "carboidrati_100g": c_100, "proteine_100g": p_100, "grassi_100g": f_100}
+            data = {
+                "nome": nuovo_nome, 
+                "calorie_100g": kcal_100,
+                "carboidrati_100g": c_100, 
+                "proteine_100g": p_100, 
+                "grassi_100g": f_100
+            }
             supabase.table("ingredienti").insert(data).execute()
             st.success(f"'{nuovo_nome}' salvato con successo! Ricarica la pagina.")
             st.rerun()
@@ -196,7 +203,7 @@ with expander_piatto:
                 res_piatto = supabase.table("piatti").insert({"nome_piatto": nome_nuovo_piatto}).execute()
                 id_nuovo_piatto = res_piatto.data[0]["id"]
                 
-                for ing in st.session_state.indigo_nuovo_piatto:
+                for ing in st.session_state.ingredienti_nuovo_piatto:
                     supabase.table("composizione_piatti").insert({
                         "id_piatto": id_nuovo_piatto,
                         "id_ingrediente": ing["id"],
