@@ -13,7 +13,7 @@ def init_connection():
 supabase = init_connection()
 
 # --- INIZIALIZZAZIONE DELLA GIORNATA (STATO DELL'APP) ---
-if "diario_alimentare" not NULL not in st.session_state:
+if "diario_alimentare" not in st.session_state:
     st.session_state.diario_alimentare = []  # Lista dei macro dei cibi mangiati oggi
 
 # --- FUNZIONI DI RECUPERO DATI ---
