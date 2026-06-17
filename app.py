@@ -35,7 +35,7 @@ def ottieni_componenti_piatto(id_piatto):
     res = supabase.table("composizione_piatti").select("grammi, ingredienti(calorie_100g, carboidrati_100g, proteine_100g, grassi_100g, nome)").eq("id_piatto", id_piatto).execute()
     return res.data
 
-# --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI ---
+# --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI (SISTEMATA PER IL CONTRASTO) ---
 def genera_card_macro(titolo, attuale, target, unita="g"):
     percentuale = (attuale / target) * 100 if target > 0 else 0
     
@@ -48,18 +48,18 @@ def genera_card_macro(titolo, attuale, target, unita="g"):
         
     html_code = f"""
     <div style="
-        background-color: #f0f2f6; 
+        background-color: rgba(128, 128, 128, 0.15); 
         padding: 15px; 
         border-radius: 10px; 
         border-left: 5px solid {colore};
         margin-bottom: 10px;
         text-align: center;
     ">
-        <p style="margin: 0; font-size: 14px; color: #555; font-weight: bold;">{titolo}</p>
-        <p style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">
-            <span style="color: {colore};">{attuale:.1f}</span> / {target}{unita}
+        <p style="margin: 0; font-size: 13px; color: var(--text-color, #31333F); font-weight: bold; opacity: 0.8;">{titolo}</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: var(--text-color, #31333F);">
+            <span style="color: {colore}; font-size: 22px;">{attuale:.1f}</span> / {target}{unita}
         </p>
-        <p style="margin: 0; font-size: 11px; color: #888;">{percentuale:.1f}% del target</p>
+        <p style="margin: 2px 0 0 0; font-size: 11px; color: {colore}; font-weight: bold;">{percentuale:.1f}% del target</p>
     </div>
     """
     return st.markdown(html_code, unsafe_allow_html=True)
@@ -80,7 +80,6 @@ with col1:
         
         if st.button("Aggiungi Ingrediente"):
             dettagli = next(item for item in lista_ingredienti if item["nome"] == ingr_scelto)
-            # Calcolo basato sui valori reali del database
             kcal = (dettagli.get("calorie_100g", 0) * grammi) / 100
             carbi = (dettagli["carboidrati_100g"] * grammi) / 100
             pro = (dettagli["proteine_100g"] * grammi) / 100
