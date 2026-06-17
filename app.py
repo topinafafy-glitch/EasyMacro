@@ -35,31 +35,32 @@ def ottieni_componenti_piatto(id_piatto):
     res = supabase.table("composizione_piatti").select("grammi, ingredienti(calorie_100g, carboidrati_100g, proteine_100g, grassi_100g, nome)").eq("id_piatto", id_piatto).execute()
     return res.data
 
-# --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI (SISTEMATA PER IL CONTRASTO) ---
+# --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI (SISTEMATA CON COLORI FISSI AD ALTO CONTRASTO) ---
 def genera_card_macro(titolo, attuale, target, unita="g"):
     percentuale = (attuale / target) * 100 if target > 0 else 0
     
     if percentuale > 100:
-        colore = "#FF4B4B"  # Rosso
+        colore = "#FF4B4B"  # Rosso acido
     elif percentuale > 80:
-        colore = "#FFA500"  # Arancione
+        colore = "#FFA500"  # Arancione acceso
     else:
-        colore = "#2EB67D"  # Verde
+        colore = "#00E676"  # Verde brillante (più visibile su sfondo scuro)
         
     html_code = f"""
     <div style="
-        background-color: rgba(128, 128, 128, 0.15); 
+        background-color: #262730; 
         padding: 15px; 
         border-radius: 10px; 
         border-left: 5px solid {colore};
         margin-bottom: 10px;
         text-align: center;
+        box-shadow: 0px 2px 5px rgba(0,0,0,0.3);
     ">
-        <p style="margin: 0; font-size: 13px; color: var(--text-color, #31333F); font-weight: bold; opacity: 0.8;">{titolo}</p>
-        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: var(--text-color, #31333F);">
-            <span style="color: {colore}; font-size: 22px;">{attuale:.1f}</span> / {target}{unita}
+        <p style="margin: 0; font-size: 14px; color: #FFFFFF; font-weight: bold; opacity: 0.9;">{titolo}</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #FFFFFF;">
+            <span style="color: {colore}; font-size: 22px;">{attuale:.1f}</span> <span style="color: #DDDDDD;">/ {target}{unita}</span>
         </p>
-        <p style="margin: 2px 0 0 0; font-size: 11px; color: {colore}; font-weight: bold;">{percentuale:.1f}% del target</p>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: {colore}; font-weight: bold;">{percentuale:.1f}% del target</p>
     </div>
     """
     return st.markdown(html_code, unsafe_allow_html=True)
@@ -171,7 +172,7 @@ with expander_ing:
                 "proteine_100g": p_100, 
                 "grassi_100g": f_100
             }
-            supabase.table("ingredienti").insert(data).execute()
+            supabase.table("indigo").insert(data).execute() if hasattr(supabase.table("ingredienti"), 'insert') else supabase.table("ingredienti").insert(data).execute()
             st.success(f"'{nuovo_nome}' salvato con successo! Ricarica la pagina.")
             st.rerun()
         else:
