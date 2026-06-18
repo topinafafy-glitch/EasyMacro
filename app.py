@@ -172,7 +172,7 @@ with expander_ing:
                 "proteine_100g": p_100, 
                 "grassi_100g": f_100
             }
-            supabase.table("indigo").insert(data).execute() if hasattr(supabase.table("ingredienti"), 'insert') else supabase.table("ingredienti").insert(data).execute()
+            supabase.table("ingredienti").insert(data).execute()
             st.success(f"'{nuovo_nome}' salvato con successo! Ricarica la pagina.")
             st.rerun()
         else:
