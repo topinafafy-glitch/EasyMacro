@@ -18,11 +18,7 @@ def init_connection():
 
 supabase = init_connection()
 
-# --- INIZIALIZZAZIONE DELLA GIORNATA ---
-if "diario_alimentare" not in st.session_state:
-    st.session_state.diario_alimentare = []
-
-# --- FUNZIONI DI RECUPERO DATI ---
+# --- FUNZIONI DI RECUPERO E SALVATAGGIO DATI ---
 def ottieni_ingredienti():
     res = supabase.table("ingredienti").select("*").order("nome").execute()
     return res.data
@@ -35,16 +31,37 @@ def ottieni_componenti_piatto(id_piatto):
     res = supabase.table("composizione_piatti").select("grammi, ingredienti(calorie_100g, carboidrati_100g, proteine_100g, grassi_100g, nome)").eq("id_piatto", id_piatto).execute()
     return res.data
 
-# --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI (SISTEMATA CON COLORI FISSI AD ALTO CONTRASTO) ---
+def ottieni_diario_oggi():
+    # Recupera solo i cibi mangiati nella data odierna
+    oggi = date.today().isoformat()
+    res = supabase.table("diario_oggi").select("*").eq("data_giorno", oggi).execute()
+    return res.data
+
+def aggiungi_al_diario(nome, kcal, carbi, pro, fat):
+    data = {
+        "data_giorno": date.today().isoformat(),
+        "nome_cibo": nome,
+        "calorie": kcal,
+        "carboidrati": carbi,
+        "proteine": pro,
+        "grassi": fat
+    }
+    supabase.table("diario_oggi").insert(data).execute()
+
+def svuota_diario_oggi():
+    oggi = date.today().isoformat()
+    supabase.table("diario_oggi").delete().eq("data_giorno", oggi).execute()
+
+# --- FUNZIONE AUSILIARIA PER GENERARE I CONTATORI COLORATI ---
 def genera_card_macro(titolo, attuale, target, unita="g"):
     percentuale = (attuale / target) * 100 if target > 0 else 0
     
     if percentuale > 100:
-        colore = "#FF4B4B"  # Rosso acido
+        colore = "#FF4B4B"  # Rosso
     elif percentuale > 80:
-        colore = "#FFA500"  # Arancione acceso
+        colore = "#FFA500"  # Arancione
     else:
-        colore = "#00E676"  # Verde brillante (più visibile su sfondo scuro)
+        colore = "#00E676"  # Verde
         
     html_code = f"""
     <div style="
@@ -70,11 +87,13 @@ st.title("🥑 Il mio Diario dei Macronutrienti")
 
 col1, col2 = st.columns(2)
 
+# Recupera subito i dati aggiornati dal database
+diario_salvato = ottieni_diario_oggi()
+lista_ingredienti = ottieni_ingredienti()
+nomi_ingr = [i["nome"] for i in lista_ingredienti]
+
 with col1:
     st.subheader("➕ Aggiungi nel Piatto")
-    lista_ingredienti = ottieni_ingredienti()
-    nomi_ingr = [i["nome"] for i in lista_ingredienti]
-    
     if nomi_ingr:
         ingr_scelto = st.selectbox("Seleziona Ingrediente", nomi_ingr, key="ingr")
         grammi = st.number_input("Grammi", min_value=1, value=100, step=10)
@@ -86,10 +105,9 @@ with col1:
             pro = (dettagli["proteine_100g"] * grammi) / 100
             fat = (dettagli["grassi_100g"] * grammi) / 100
             
-            st.session_state.diario_alimentare.append({
-                "nome": f"{ingr_scelto} ({grammi}g)", "kcal": kcal, "carbi": carbi, "pro": pro, "fat": fat
-            })
+            aggiungi_al_diario(f"{ingr_scelto} ({grammi}g)", kcal, carbi, pro, fat)
             st.success(f"Aggiunto: {ingr_scelto}!")
+            st.rerun()
     else:
         st.warning("Nessun ingrediente presente. Crealo nel pannello sotto!")
 
@@ -114,20 +132,19 @@ with col2:
                 tot_pro += (ing["proteine_100g"] * g) / 100
                 tot_fat += (ing["grassi_100g"] * g) / 100
                 
-            st.session_state.diario_alimentare.append({
-                "nome": piatto_scelto, "kcal": tot_kcal, "carbi": tot_carbi, "pro": tot_pro, "fat": tot_fat
-            })
+            aggiungi_al_diario(piatto_scelto, tot_kcal, tot_carbi, tot_pro, tot_fat)
             st.success(f"Aggiunto: {piatto_scelto}!")
+            st.rerun()
     else:
         st.info("Nessun piatto salvato.")
 
 # --- TOTALE DELLA GIORNATA ---
 st.header("📊 Riassunto Oggi")
 
-tot_kcal = sum(item["kcal"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
-tot_c = sum(item["carbi"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
-tot_p = sum(item["pro"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
-tot_f = sum(item["fat"] for item in st.session_state.diario_alimentare) if st.session_state.diario_alimentare else 0.0
+tot_kcal = sum(item["calorie"] for item in diario_salvato) if diario_salvato else 0.0
+tot_c = sum(item["carboidrati"] for item in diario_salvato) if diario_salvato else 0.0
+tot_p = sum(item["proteine"] for item in diario_salvato) if diario_salvato else 0.0
+tot_f = sum(item["grassi"] for item in diario_salvato) if diario_salvato else 0.0
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
@@ -139,13 +156,13 @@ with c3:
 with c4:
     genera_card_macro("🥑 Grassi", tot_f, TARGET_GRASSI)
 
-if st.session_state.diario_alimentare:
+if diario_salvato:
     st.write("### Cibi inseriti oggi:")
-    for item in st.session_state.diario_alimentare:
-        st.text(f"• {item['nome']} ➡️ {int(item['kcal'])} kcal | C: {item['carbi']:.1f}g | P: {item['pro']:.1f}g | G: {item['fat']:.1f}g")
+    for item in diario_salvato:
+        st.text(f"• {item['nome_cibo']} ➡️ {int(item['calorie'])} kcal | C: {item['carboidrati']:.1f}g | P: {item['proteine']:.1f}g | G: {item['grassi']:.1f}g")
         
     if st.button("Svuota Giornata"):
-        st.session_state.diario_alimentare = []
+        svuota_diario_oggi()
         st.rerun()
 else:
     st.info("Non hai ancora mangiato nulla oggi.")
