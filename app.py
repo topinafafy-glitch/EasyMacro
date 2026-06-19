@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
-
+import datetime
+from datetime import date
 # --- CONNESSIONE AL DATABASE ---
 # Sostituisci questi valori con i tuoi dati di Supabase!
 SUPABASE_URL = "https://jblladmggeuokluiopou.supabase.co"
